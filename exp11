@@ -1,0 +1,87 @@
+Create server.js in the folder express-student-api-esm 
+import express from 'express'; 
+import bodyParser from 'body-parser'; 
+import studentRoutes from './routes/students.js'; 
+import authRoutes from './routes/auth.js'; 
+const app = express(); 
+app.use(bodyParser.json()); 
+// Routes 
+app.use('/auth', authRoutes); 
+app.use('/students', studentRoutes); 
+const PORT = 3000; 
+app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`)); 
+
+
+4. Create authMiddleware.js in the folder express-student-api-esm/middleware 
+import jwt from 'jsonwebtoken'; 
+const SECRET_KEY = 'mysecretkey'; 
+export default function authenticateToken(req, res, next) { 
+const authHeader = req.headers['authorization']; 
+const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN 
+if (!token) return res.status(403).json({ message: 'Token required' }); 
+jwt.verify(token, SECRET_KEY, (err, user) => { 
+if (err) return res.status(403).json({ message: 'Invalid token' }); 
+req.user = user; 
+next(); 
+}); 
+} 
+
+
+5. Create the students.js in the folder express-student-esm/routes 
+import express from 'express'; 
+import jwt from 'jsonwebtoken'; 
+import bcrypt from 'bcryptjs'; 
+const router = express.Router(); 
+const SECRET_KEY = 'mysecretkey'; 
+// Dummy user (password is hashed version of "12345") 
+const user = {  
+username: 'admin',  
+password: bcrypt.hashSync('12345', 10)  
+}; 
+// LOGIN - Generate JWT 
+router.post('/login', async (req, res) => { 
+const { username, password } = req.body; 
+if (username !== user.username) { 
+return res.status(401).json({ message: 'Invalid credentials' }); 
+} 
+const validPassword = await bcrypt.compare(password, user.password); 
+if (!validPassword) { 
+return res.status(401).json({ message: 'Invalid credentials' }); 
+} 
+const token = jwt.sign({ username }, SECRET_KEY, { expiresIn: '1h' }); 
+res.json({ token }); 
+}); 
+export default router; 
+
+
+6. Create the students.js in the folder express-student-esm/routes: 
+import express from 'express'; 
+import authenticateToken from '../middleware/authMiddleware.js'; 
+const router = express.Router(); 
+let students = [ 
+{ id: 1, name: 'Saravan', age: 21 }, 
+{ id: 2, name: 'Kumar', age: 22 } 
+]; 
+// Protected CRUD endpoints 
+router.get('/', authenticateToken, (req, res) => { 
+res.json(students); 
+}); 
+router.post('/', authenticateToken, (req, res) => { 
+const newStudent = req.body; 
+students.push(newStudent); 
+res.status(201).json(newStudent); 
+}); 
+router.put('/:id', authenticateToken, (req, res) => { 
+const index = students.findIndex(s => s.id == req.params.id); 
+if (index !== -1) { 
+students[index] = req.body; 
+res.json(students[index]); 
+} else { 
+res.status(404).send('Student not found'); 
+} 
+}); 
+router.delete('/:id', authenticateToken, (req, res) => { 
+students = students.filter(s => s.id != req.params.id); 
+res.send('Student deleted'); 
+}); 
+export default router;
